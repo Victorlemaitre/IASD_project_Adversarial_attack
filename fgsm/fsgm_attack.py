@@ -1,6 +1,8 @@
 import os, sys
 sys.path.append("../")
 from test_project import load_project, test_natural, get_validation_loader
+from model import Net
+
 import torch
 import torchvision
 import torch.nn.functional as F
@@ -106,22 +108,24 @@ def save_image_pair(clean_img, adv_img, clean_pred, adv_pred, idx, save_dir):
 if __name__ == "__main__":
 
     # Parameter setups
-    pretrained_model = "../data/lenet_mnist_model.pth"
     project_dir = "../"
     batch_size=64
     num_samples=100
     saved_examples_eps=4
     device = "mps" if torch.backends.mps.is_available() else "cpu"
-    save_path = 'assets/'
+    save_path = 'outputs/'
+    weights_path = os.path.join("../models", "default_model.pth")
 
     os.makedirs(save_path, exist_ok=True)
     torch.manual_seed(42)
     criterion = torch.nn.NLLLoss()
     
     # Model Loading
-    project_module = load_project(project_dir)
-    net = project_module.Net().to(device)
-    net.load_for_testing(project_dir=project_dir)
+    net = Net().to(device)
+    state = torch.load(weights_path, map_location=device)
+    net.load_state_dict(state)
+    net.eval()
+    print(f"Loaded model weights from: {weights_path}")
 
     # CIFAR Loading
     transform = transforms.Compose([transforms.ToTensor()])
