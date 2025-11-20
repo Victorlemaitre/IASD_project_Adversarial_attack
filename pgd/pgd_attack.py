@@ -1,4 +1,5 @@
 import os, sys
+import time
 sys.path.append("../")
 from test_project import load_project, test_natural, get_validation_loader
 from model import Net
@@ -10,51 +11,31 @@ import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 import torchvision.utils as vutils
 
-import torch
-import torch.nn.functional as F
 
-def fgsm_attack(model, images, labels, epsilon, criterion=None):
+def pgd_attack(model, images, labels, epsilon=0.3, delta=2/255, iters=30, criterion=None):
     """
-    Generates adversarial examples using the Fast Gradient Sign Method (FGSM):
-
-        x_adv = x + ε · sign(∇_x L(model(x), y))
-
-    Args:
-        model (nn.Module): Network to attack.
-        images (Tensor): Input batch.
-        labels (Tensor): Ground-truth labels.
-        epsilon (float): Perturbation magnitude.
-        criterion (callable): Loss function.
-
-    Returns:
-        Tensor: Adversarial images clipped to [0, 1].
+    Perform PGD attack (for the inf norm) on a batch of images.
     """
-
+    images = images.clone().detach().to(device)
+    labels = labels.to(device)
+    ori_images = images.data
     if criterion is None:
         criterion = torch.nn.NLLLoss()
+    for i in range(iters):
+        images.requires_grad = True
+        outputs = model(images)
 
-    # Cloning
-    images = images.clone().detach().requires_grad_(True)
+        model.zero_grad()
+        cost = criterion(outputs, labels).to(device)
+        cost.backward()
 
-    # Forward
-    outputs = model(images)
-    loss = criterion(outputs, labels)
+        adv_images = images + delta*images.grad.sign()
+        clamped_attack = torch.clamp(adv_images - ori_images, min=-epsilon, max=epsilon)
+        images = torch.clamp(ori_images + clamped_attack, min=0, max=1).detach_()
 
-    # Backward 
-    model.zero_grad()
-    loss.backward()
+    return images
 
-    # Perturbation
-    grad_sign = images.grad.detach().sign()
-    adv_images = images + epsilon * grad_sign
-
-    # Clamping
-    adv_images = torch.clamp(adv_images, 0, 1).detach()
-
-    return adv_images
-
-def test_fgsm(net, test_loader, num_samples, epsilon, criterion, save_path='assets/', max_examples=1):
-
+def test_pgd(net, test_loader, num_samples, epsilon, delta, iters, criterion, save_path='assets/', max_examples=1):
     correct = 0
     total = 0
     saved = 0
@@ -63,13 +44,10 @@ def test_fgsm(net, test_loader, num_samples, epsilon, criterion, save_path='asse
         images = images.to(device)
         labels = labels.to(device)
 
-        # total = 0
-        # correct = 0
-
         for _ in range(num_samples):
 
-            # FGSM Attack
-            perturbed = fgsm_attack(net, images, labels, epsilon, criterion)
+            # PGD Attack
+            perturbed = pgd_attack(net, images, labels, epsilon, delta, iters, criterion)
 
             # Forward on perturbation
             outputs_adv = net(perturbed)
@@ -88,7 +66,7 @@ def test_fgsm(net, test_loader, num_samples, epsilon, criterion, save_path='asse
                 clean_pred = outputs_clean.max(1)[1][0].item()
                 adv_pred   = predicted[0].item()
 
-                save_dir = os.path.join(save_path, f"eps_{epsilon}")
+                save_dir = os.path.join(save_path, f"eps_{epsilon}_delta_{delta}_iters_{iters}")
                 save_image_pair(clean_img, adv_img, clean_pred, adv_pred, idx=saved, save_dir=save_dir)
                 saved += 1
 
@@ -110,10 +88,10 @@ if __name__ == "__main__":
     # Parameter setups
     project_dir = "../"
     batch_size=64
-    num_samples=100
+    num_samples=1 # higher than 1 for randomized networks
     saved_examples_eps=4
     device = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
-    save_path = 'outputs/'
+    save_path = 'assets/'
     weights_path = os.path.join("../models", "default_model.pth")
 
     os.makedirs(save_path, exist_ok=True)
@@ -137,20 +115,22 @@ if __name__ == "__main__":
     print(f"Clean accuracy: {acc_nat:.2f}%",)
 
     # Attacked accuracies
-    epsilons = [0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.1]
-    accuracies = []
-    for eps in epsilons:
-        attacked_acc = test_fgsm(net, valid_loader, num_samples=num_samples, epsilon=eps, criterion=criterion, save_path=save_path, max_examples=saved_examples_eps)
-        print(f"Epsilon={eps:.2f} -> Attacked accuracy = {attacked_acc:.2f}%")
-        accuracies.append(attacked_acc)
-
-    # Plots
-    plt.figure(figsize=(6,5))
-    plt.plot(epsilons, accuracies, marker="*")
-    plt.title("Attacked accuracy vs epsilon on CIFAR-10")
-    plt.xlabel("epsilon")
-    plt.ylabel("accuracy")
-    plt.grid()
-    plot_path = os.path.join(save_path, "fgsm_accuracy_curve.png")
-    plt.savefig(plot_path, dpi=200)
-    plt.show()
+    epsilons = [0.01, 0.02, 0.03, 0.04, 0.05, 0.1]
+    deltas = [0.01, 0.02]
+    iterss = [40]
+    for delta in deltas:
+        for iters in iterss:
+            accuracies = []
+            for epsilon in epsilons:
+                attacked_acc = test_pgd(net, valid_loader, num_samples=num_samples, epsilon=epsilon, delta=delta, iters=iters, criterion=criterion, save_path=save_path, max_examples=saved_examples_eps)
+                print(f"Epsilon={epsilon:.2f}, delta={delta:.2f}, iters={iters} -> Attacked accuracy = {attacked_acc:.2f}%")
+                accuracies.append(attacked_acc)
+            plt.figure(figsize=(6,5))
+            plt.plot(epsilons, accuracies, marker="*")
+            plt.title(f"Attacked accuracy vs epsilon on CIFAR-10 (delta={delta}, iters={iters})")
+            plt.xlabel("epsilon")
+            plt.ylabel("accuracy")
+            plt.grid()
+            plot_path = os.path.join(save_path, f"pgd_accuracy_curve_delta_{delta}_iters_{iters}.png")
+            plt.savefig(plot_path, dpi=200)
+            # plt.show()

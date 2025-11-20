@@ -32,8 +32,8 @@ def test_natural(net, test_loader, num_samples):
     with torch.no_grad():
         for i,data in enumerate(test_loader, 0):
             images, labels = data[0].to(device), data[1].to(device)
-            total = 0
-            correct = 0
+            # total = 0 # why reset counters?
+            # correct = 0
             for _ in range(num_samples):
                 outputs = net(images)
                 _, predicted = torch.max(outputs.data, 1)
