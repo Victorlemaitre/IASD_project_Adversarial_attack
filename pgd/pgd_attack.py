@@ -2,22 +2,21 @@ import os, sys
 import time
 sys.path.append("../")
 from test_project import load_project, test_natural, get_validation_loader
-from model import Net
-
+from model_class import Net, BigNet
+import argparse
 import torch
 import torchvision
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 import torchvision.utils as vutils
-
+import re
 
 def pgd_attack(model, images, labels, epsilon=0.3, delta=2/255, iters=30, criterion=None):
     """
     Perform PGD attack (for the inf norm) on a batch of images.
     """
-    images = images.clone().detach().to(device)
-    labels = labels.to(device)
+    images = images.clone().detach()
     ori_images = images.data
     if criterion is None:
         criterion = torch.nn.NLLLoss()
@@ -26,7 +25,7 @@ def pgd_attack(model, images, labels, epsilon=0.3, delta=2/255, iters=30, criter
         outputs = model(images)
 
         model.zero_grad()
-        cost = criterion(outputs, labels).to(device)
+        cost = criterion(outputs, labels)
         cost.backward()
 
         adv_images = images + delta*images.grad.sign()
@@ -92,16 +91,27 @@ if __name__ == "__main__":
     saved_examples_eps=4
     device = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
     save_path = 'assets/'
-    weights_path = os.path.join("../models", "default_model.pth")
-
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model-file", default=Net.model_file,
+                        help="Name of the file used to load or to sore the model weights."\
+                        "If the file exists, the weights will be load from it."\
+                        "If the file doesn't exists, or if --force-train is set, training will be performed, "\
+                        "and the model weights will be stored in this file."\
+                        "Warning: "+Net.model_file+" will be used for testing (see load_for_testing()).")
+    args = parser.parse_args()
+    weights_path = os.path.join(project_dir, args.model_file)
     os.makedirs(save_path, exist_ok=True)
     torch.manual_seed(42)
     criterion = torch.nn.NLLLoss()
     
     # Model Loading
-    net = Net().to(device)
-    state = torch.load(weights_path, map_location=device)
-    net.load_state_dict(state)
+    pattern = re.compile("big", re.IGNORECASE)
+    if pattern.search(args.model_file):
+        net = BigNet().to(device)
+    else:
+        net = Net().to(device)
+
+    net.load(weights_path,device)
     net.eval()
     print(f"Loaded model weights from: {weights_path}")
 
