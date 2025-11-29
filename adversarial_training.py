@@ -224,8 +224,11 @@ def main():
 
     net.load(args.model_file,device)
     net.eval()
-    acc = test_natural(net, valid_loader)
-    print("Model natural accuracy (valid): {}".format(acc))
+    # acc = test_natural(net, valid_loader)
+    acc_nat, acc_adv = test_natural_and_pgd(net, valid_loader, num_samples, args.epsilon, args.delta, args.iters, nn.NLLLoss())
+    print(f"Natural accuracy  = {acc_nat:.2f}%")
+    print(f"Attacked accuracy = {acc_adv:.2f}% (PGD attack with eps={args.epsilon}, delta={args.delta}, iters={args.iters})")
+    # print("Model natural accuracy (valid): {}".format(acc))
 
     
 
