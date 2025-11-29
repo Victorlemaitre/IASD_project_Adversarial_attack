@@ -12,7 +12,7 @@ export DATA="/projects/m25146/data/"
 #SBATCH -N 1
 #SBATCH -c 28
 #SBATCH --gres=gpu:${n_gpu}
-#SBATCH --time=00:20:00
+#SBATCH --time=00:40:00
 #SBATCH --mem=256G
 #SBATCH --account=m25146        # Your project account 
 #SBATCH --job-name=adv_test      # Job name
@@ -22,5 +22,5 @@ source advvenv/bin/activate
 # You should launch this script from the main folder
 cd ./pgd
 # Run your training script
-python -u pgd_attack.py --model-file $@
+python -u pgd_attack.py $@
 EOT

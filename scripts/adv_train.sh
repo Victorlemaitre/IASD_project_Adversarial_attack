@@ -12,7 +12,7 @@ export DATA="/projects/m25146/data/"
 #SBATCH -N 1
 #SBATCH -c 28
 #SBATCH --gres=gpu:${n_gpu}
-#SBATCH --time=00:20:00
+#SBATCH --time=01:00:00
 #SBATCH --mem=256G
 #SBATCH --account=m25146        # Your project account 
 #SBATCH --job-name=adv_train      # Job name

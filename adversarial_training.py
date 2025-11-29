@@ -12,7 +12,8 @@ import torch.utils.data
 import torchvision.transforms as transforms
 
 from pgd.pgd_attack import pgd_attack
-from model_class import Net, BigNet
+import importlib
+from model_class import Net
 
 
 device = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
@@ -25,7 +26,7 @@ def adversarial_training(net, train_loader, valid_loader, pth_filename, num_epoc
     print("Starting training")
     
     criterion = nn.NLLLoss()
-    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.AdamW(net.parameters(), lr=1e-3, weight_decay=0.01)
     
     for epoch in range(num_epochs):  # loop over the dataset multiple times
 
@@ -35,14 +36,17 @@ def adversarial_training(net, train_loader, valid_loader, pth_filename, num_epoc
             inputs, labels = data[0].to(device), data[1].to(device)
 
             batch_size = inputs.size(0)
+            t = epoch/num_epochs
+            iters_t = int((1-t)*10 + t*40)
+            epsilon_t = (1-t)*0.01 + t*0.1
             rand_idx = torch.randperm(batch_size, device=inputs.device)[:int(batch_size*adv_to_nat_ratio)]
             inputs[rand_idx] = pgd_attack(
                     net, 
                     inputs[rand_idx], 
                     labels[rand_idx], 
-                    epsilon, 
+                    epsilon_t, 
                     delta, 
-                    iters, 
+                    iters_t, 
                     criterion
                     )
             
@@ -67,14 +71,16 @@ def adversarial_training(net, train_loader, valid_loader, pth_filename, num_epoc
             nat_acc, adv_acc = test_natural_and_pgd(net, valid_loader, num_samples, epsilon, delta, iters, criterion)
             print(f"Natural accuracy  = {nat_acc:.2f}%")
             print(f"Attacked accuracy = {adv_acc:.2f}%")
+            net.save(pth_filename[:-4]+f"_checkpoint{epoch}.pth")
         
 
     net.save(pth_filename)
     print('Model saved in {}'.format(pth_filename))
 
 def test_natural_and_pgd(net, test_loader, num_samples, epsilon, delta, iters, criterion):
-
-    net.eval()
+    
+    #net.eval()
+    net.train()
 
     total_nat, total_adv, correct_nat, correct_adv = 0, 0, 0, 0
     for i, (images, labels) in enumerate(test_loader):
@@ -166,16 +172,14 @@ def main():
     parser.add_argument('-ratio', '--adv_to_nat_ratio', type=float, default=0.5,
                         help="ratio clean to adversarial input used during training")
     
+    parser.add_argument('-mc', '--model-class', type=str, default='Net')
     args = parser.parse_args()
 
     #### Create model and move it to whatever device is available (gpu/cpu)
-    pattern = re.compile("big", re.IGNORECASE)
-    if pattern.search(args.model_file):
-        net = BigNet().to(device)
-    else:
-        net = Net().to(device)
-    
-
+   
+    models = importlib.import_module("model_class")
+    net_class = getattr(models, args.model_class)
+    net = net_class().to(device)
 
     num_samples = 1 # higher than 1 for randomized networks
 
