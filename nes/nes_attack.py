@@ -12,23 +12,26 @@ sys.path.append("../")
 from test_project import test_natural, get_validation_loader
 from model_class import Net, BigNet
 
-def nes_est_grad(classifier, y, x, sigma: float, n_samples: int) :
-    
+def nes_est_grad_loss(model, x, y, sigma, n_samples, criterion):
     grad = torch.zeros_like(x, device=device)
-    
-    for _ in range(1, n_samples+1):
+    y_tensor = torch.tensor([y], device=device)
 
+    for _ in range(n_samples):
         u = torch.randn_like(x, device=device)
-        
-        pos_sample = x + sigma * u
-        neg_sample = x - sigma * u
-        
-        grad += classifier(pos_sample.unsqueeze(0).to(device)).squeeze(0)[y] * u
-        grad -= classifier(neg_sample.unsqueeze(0).to(device)).squeeze(0)[y] * u
+        pos = x + sigma * u
+        neg = x - sigma * u
+
+        logits_pos = model(pos.unsqueeze(0))
+        logits_neg = model(neg.unsqueeze(0))
+
+        loss_pos = criterion(logits_pos, y_tensor)
+        loss_neg = criterion(logits_neg, y_tensor)
+
+        grad += (loss_pos - loss_neg) * u
 
     return grad / (2 * sigma * n_samples)
 
-def nes_pgd_attack(model, images, labels, sigma=0.001, n_samples=5000, epsilon=0.3, delta=2/255, iters=30):
+def nes_pgd_attack(model, images, labels, criterion, sigma=0.001, n_samples=5000, epsilon=0.3, delta=2/255, iters=30):
     """
     NES+PGD black-box attack: PGD where the gradient is estimated with NES instead of backprop.
     """
@@ -41,7 +44,7 @@ def nes_pgd_attack(model, images, labels, sigma=0.001, n_samples=5000, epsilon=0
         for i in range(adv_images.size(0)):
             x_i = adv_images[i]
             y_i = labels[i].item()
-            grads[i] = nes_est_grad(model, y_i, x_i, sigma, n_samples)
+            grads[i] = nes_est_grad_loss(model=model, y=y_i, x=x_i, sigma=sigma, n_samples=n_samples, criterion=criterion)
 
         adv_images = adv_images + delta * grads.sign()
         clamped_attack = torch.clamp(adv_images - ori_images, min=-epsilon, max=epsilon)
@@ -50,7 +53,7 @@ def nes_pgd_attack(model, images, labels, sigma=0.001, n_samples=5000, epsilon=0
     return images
 
 
-def test_nes_pgd(model, test_loader, epsilon, delta, iters, sigma, n_samples, save_path='assets/', max_examples=1):
+def test_nes_pgd(model, test_loader, epsilon, delta, iters, sigma, n_samples, criterion, save_path='assets/', max_examples=1):
 
     correct = 0
     total = 0
@@ -58,13 +61,13 @@ def test_nes_pgd(model, test_loader, epsilon, delta, iters, sigma, n_samples, sa
 
     pbar = tqdm(test_loader, desc="NES-PGD Attack", ncols=100)
 
-    for batch_idx, (images, labels) in enumerate(pbar):
+    for _, (images, labels) in enumerate(pbar):
 
         images = images.to(device)
         labels = labels.to(device)
 
         # NES-PGD Attack
-        perturbed = nes_pgd_attack(model, images, labels, sigma=sigma, n_samples=n_samples, epsilon=epsilon, delta=delta, iters=iters)
+        perturbed = nes_pgd_attack(model, images, labels, sigma=sigma, criterion=criterion, n_samples=n_samples, epsilon=epsilon, delta=delta, iters=iters)
 
         # Forward pass on adversarial images
         outputs_adv = model(perturbed)
@@ -152,14 +155,18 @@ if __name__ == "__main__":
     acc_nat = test_natural(net, valid_loader, num_samples=num_samples)
     print(f"Clean accuracy: {acc_nat:.2f}%",)
 
-     # Test NES estimate
+    # Test NES estimate
     print(f"-- TEST NES ATTACK nes_pgd_attack--")
-    epsilon = 0.01
-    delta   = 0.02
-    iters   = 40
+    
+    # Param NES
     sigma   = 0.001
     n_samples = 1000
 
+    # Param PGD
+    epsilon = 0.01
+    delta   = 0.01
+    iters   = 10 # 1 FSGM
+    
     print(f"Using device :{device}")
     acc_nespdg = test_nes_pgd(
         model=net,
@@ -170,6 +177,7 @@ if __name__ == "__main__":
         sigma=sigma,
         n_samples=n_samples,
         save_path=save_path,
+        criterion=criterion,
         max_examples=3
     )
     print(f"NES-PGD attacked accuracy = {acc_nespdg:.2f}%")
