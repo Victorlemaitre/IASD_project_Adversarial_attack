@@ -2,7 +2,7 @@ import os, sys
 import time
 sys.path.append("../")
 from test_project import load_project, test_natural, get_validation_loader
-from model_class import Net, BigNet
+from model_class import Net, BigNet, BiggerNet
 import argparse
 import torch
 import torchvision
@@ -11,6 +11,7 @@ import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 import torchvision.utils as vutils
 import re
+import importlib
 
 def pgd_attack(model, images, labels, epsilon=0.3, delta=2/255, iters=30, criterion=None):
     """
@@ -98,21 +99,22 @@ if __name__ == "__main__":
                         "If the file doesn't exists, or if --force-train is set, training will be performed, "\
                         "and the model weights will be stored in this file."\
                         "Warning: "+Net.model_file+" will be used for testing (see load_for_testing()).")
+
+    parser.add_argument('-mc', '--model-class', type=str, default='Net')
     args = parser.parse_args()
+
+
+    models = importlib.import_module("model_class")
+    net_class = getattr(models, args.model_class)
+    net = net_class().to(device)
+
     weights_path = os.path.join(project_dir, args.model_file)
     os.makedirs(save_path, exist_ok=True)
     torch.manual_seed(42)
     criterion = torch.nn.NLLLoss()
     
-    # Model Loading
-    pattern = re.compile("big", re.IGNORECASE)
-    if pattern.search(args.model_file):
-        net = BigNet().to(device)
-    else:
-        net = Net().to(device)
-
     net.load(weights_path,device)
-    net.eval()
+    net.train()
     print(f"Loaded model weights from: {weights_path}")
 
     # CIFAR Loading
