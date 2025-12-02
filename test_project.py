@@ -6,6 +6,7 @@ import importlib
 import importlib.abc
 import torch, torchvision
 import torchvision.transforms as transforms
+import model_class
 
 torch.seed()
 use_cuda = torch.cuda.is_available()
