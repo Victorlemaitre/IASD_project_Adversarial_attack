@@ -6,10 +6,17 @@ The goal was to train a classifier on CIFAR-10 images and make it robust to whit
 A short list of what we did (sections with a * are my own contribution) : 
 - Implemented FSGM and PGD 
 - Trained a classifier using curriculum adversarial training *
-- Tested more complex architecture like Vision Transformers and Wide ResNet *
+- Tested more complex architectures like Vision Transformers and Wide ResNet *
 - Dabbled in data augmentation and synthetic data generation using conditional Gans *
 - Added noise in the form of noise layer or a learnable noise parameter
 - Tried black box gradient estimation attacks
 
 
 You can find a much more detailed account of our work in our final [report](report.pdf). 
+
+
+Just for fun. Here are the best synthetic images we got using a conditional Gan inspired from the BigGan architecture. 
+
+![CIFAR-10 images](EMA_epoch_200.png)
+
+Sadly even with our best efforts (including exponential moving average and discriminator driven latent sampling !) we did not get satisfying results :(
