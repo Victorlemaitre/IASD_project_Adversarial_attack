@@ -17,6 +17,8 @@ You can find a much more detailed account of our work in our final [report](repo
 
 Just for fun. Here are the best synthetic images we got using a conditional Gan inspired from the BigGan architecture. 
 
-![CIFAR-10 images](./Gan/EMA_epoch_200.png)
+<p align="center">
+  <img src="./Gan/EMA_epoch_200.png" alt="CIFAR-10 images">
+</p>
 
 Sadly even with our best efforts (including exponential moving average and discriminator driven latent sampling !) we did not get satisfying results :(
