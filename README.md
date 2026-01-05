@@ -1,4 +1,8 @@
 
+You can find a much more detailed account of our work in our final [report](report.pdf). 
+
+---
+
 This repo is the third project of the datalab course at master IASD. 
 
 The goal was to train a classifier on CIFAR-10 images and make it robust to white-box adversarial attacks like FGSM and PGD. 
@@ -11,8 +15,6 @@ A short list of what we did (sections with a * are my own contribution) :
 - Added noise in the form of noise layer or a learnable noise parameter
 - Tried black box gradient estimation attacks
 
-
-You can find a much more detailed account of our work in our final [report](report.pdf). 
 
 
 Just for fun. Here are the best synthetic images we got using a conditional Gan inspired from the BigGan architecture. 
